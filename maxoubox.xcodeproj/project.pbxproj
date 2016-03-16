@@ -13,7 +13,7 @@
 		098C18E51C9092FE00249F0B /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 098C18E31C9092FE00249F0B /* Main.storyboard */; };
 		098C18E71C9092FE00249F0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 098C18E61C9092FE00249F0B /* Assets.xcassets */; };
 		098C18EA1C9092FE00249F0B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 098C18E81C9092FE00249F0B /* LaunchScreen.storyboard */; };
-		098C18F31C90950E00249F0B /* maxoubox.c in Sources */ = {isa = PBXBuildFile; fileRef = 098C18F11C90950E00249F0B /* maxoubox.c */; };
+		098C18F31C90950E00249F0B /* maxoubox.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 098C18F11C90950E00249F0B /* maxoubox.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +27,7 @@
 		098C18E61C9092FE00249F0B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		098C18E91C9092FE00249F0B /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		098C18EB1C9092FE00249F0B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		098C18F11C90950E00249F0B /* maxoubox.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = maxoubox.c; sourceTree = SOURCE_ROOT; };
+		098C18F11C90950E00249F0B /* maxoubox.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = maxoubox.cpp; sourceTree = SOURCE_ROOT; };
 		098C18F21C90950E00249F0B /* maxoubox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = maxoubox.h; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -70,7 +70,7 @@
 				098C18E81C9092FE00249F0B /* LaunchScreen.storyboard */,
 				098C18EB1C9092FE00249F0B /* Info.plist */,
 				098C18DA1C9092FE00249F0B /* Supporting Files */,
-				098C18F11C90950E00249F0B /* maxoubox.c */,
+				098C18F11C90950E00249F0B /* maxoubox.cpp */,
 				098C18F21C90950E00249F0B /* maxoubox.h */,
 			);
 			path = maxoubox;
@@ -156,7 +156,7 @@
 			files = (
 				098C18E21C9092FE00249F0B /* ViewController.m in Sources */,
 				098C18DF1C9092FE00249F0B /* AppDelegate.m in Sources */,
-				098C18F31C90950E00249F0B /* maxoubox.c in Sources */,
+				098C18F31C90950E00249F0B /* maxoubox.cpp in Sources */,
 				098C18DC1C9092FE00249F0B /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -304,6 +304,7 @@
 				098C18F01C9092FE00249F0B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
