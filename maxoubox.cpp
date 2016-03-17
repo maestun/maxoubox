@@ -94,12 +94,78 @@ void LED_Enable(int aLed, int aEnable) {
 }
 
 
+unsigned int    gSequenceIndex  = 0;
+const int       gSequenceLength = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
+
+
 void BUTT_Setup() {
     dprintln(F("BUTT_Setup"));
 #ifdef __APPLE__
 #else
 #endif
 }
+
+
+
+unsigned long gButtonBuffer[NUM_BUTTONS];
+
+
+int BUTT_ReadStoreInBuffer() {
+#ifdef USE_SNES_PAD
+
+    // Get the state of all buttons
+    // INVERTED, easy parsing of SINGLE button presses at ONCE
+    gSNESBits = gSNESPad.getButtons();
+    int count = 0;
+    if(gSNESBits != 0b1111000000000000) {
+        // store all the pressed buttons in a buffer
+        for(int button = BTN_B; button <= BTN_R; button = button << 1) {
+            if(gSNESBits & button) {
+              gButtonBuffer[count] = button;
+              count++;
+            }
+        }
+    }
+
+    return count;
+#endif
+}
+
+
+int BUTT_Compare() {
+  int ret = 0;
+  // compare the stored pressed buttons in the buffer w/ the sequence.
+  // 1 - if the sequence broken, erase the buffer => retcode -1
+  // 2 - if the sequence equals but not complete, continue => retcode 0 
+  // 3 - if the sequence matches, game is won => retcode 1
+
+  if(gSequenceIndex == gSequenceLength) {
+      ret = 1;
+      for (int idx = 0; idx < gSequenceIndex; idx++) {
+        if(gButtonBuffer[idx] != SEQUENCE[idx]) {
+          ret = -1;
+          break;
+        }
+      } 
+  }
+  else {
+    ret = 0;
+    for (int idx = 0; idx < gSequenceIndex; idx++) {
+      if(gButtonBuffer[idx] != SEQUENCE[idx]) {
+
+        
+        
+        ret = -1;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+
+
+
 
 
 bool BUTT_IsPressed(int aButton) {
@@ -146,8 +212,6 @@ unsigned long     gChronoStartMS  = 0;
 unsigned long     gRemainingSEC    = 0;
 unsigned long     gTimestamp      = 0;
 bool            gWon            = false;
-unsigned int    gSequenceIndex  = 0;
-const int       gSequenceLength = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
 
 void maxou_setup() {
     dprintinit(9600);
@@ -212,16 +276,84 @@ void maxou_loop() {
     gChronoStartMS = millis();
     gRemainingSEC = CHRONO_DURATION_SEC;
 
+/*
     dprint(F("CHRONO START "));
     Serial.print(gChronoStartMS, DEC);
     dprint(F(" / "));
     Serial.println(gRemainingSEC, DEC);
-    
-    while (gRemainingSEC != 0 || gWon) {
+*/
+    gWon = false;
+    while (gRemainingSEC != 0 && gWon == false) {
 
         delay(500);
-      
+
+        int count = 0;
+        // check that all seq buttons are pressed
+        for(int idx = 0; idx < gSequenceIndex; idx++) {
+            if(BUTT_IsPressed(SEQUENCE[idx])) {
+                count++;
+                LED_Enable(SEQUENCE[idx], true);
+            }
+            else {
+                dprintln(F("** SEQ BROKEN"));
+                for (int led = 0; led < NUM_BUTTONS; led++) {
+                    LED_Enable(led, false);
+                } 
+                count = 0;
+                break;
+            }
+        }
+
+        gSequenceIndex = count;
+        if(gSequenceIndex == 0) {
+            // ignore
+        }
+        else if(gSequenceIndex == gSequenceLength) {
+            dprintln(F("** SEQ OKAY ! win **"));
+            gWon = true;
+        }
+        else {
+            dprintln(F("** SEQ IN PROGRESS"));
+        }
+
+/*
+        // read buttons
+        gSequenceIndex = BUTT_ReadStoreInBuffer();
+
+        dprint(F("INDEX "));
+        Serial.println(gSequenceIndex, DEC);
+        
         // check buttons
+        int result = BUTT_Compare();
+        if(result == -1) {
+            // invalid sequence: turn everything off
+            dprintln(F("** SEQ BROKEN"));
+            gSequenceIndex = 0;
+            for (int i = 0; i < NUM_BUTTONS; i++) {
+                LED_Enable(i, 0);
+            } 
+        }
+        else {
+            dprintln(F("** SEQ OK"));
+
+            // sequence is still okay: light up all the right buttons
+            for(int idx = 0; idx <= gSequenceIndex; idx++) {
+                LED_Enable(SEQUENCE[idx], 1);
+            }
+            gSequenceIndex++;
+            if(result == 1) {
+                // sequence finished, we won !
+                dprintln(F("** SEQ FINISHED **"));
+
+                gWon = true;
+            }
+        }
+*/
+
+
+
+        
+        /*
         if(SEQ_Okay(gSequenceIndex)) {
             dprint(F("** SEQ OK index "));
             Serial.println(gSequenceIndex, DEC);
@@ -245,6 +377,7 @@ void maxou_loop() {
                 LED_Enable(i, 0);
             }
         }
+        */
 
         // ====================================================================
         // 1.5 - time management - check if a second has elapsed
@@ -265,8 +398,8 @@ void maxou_loop() {
         }
     }
 
-
     dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
+
     
     // ====================================================================
     // 2 - check game result

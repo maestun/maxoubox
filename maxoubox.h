@@ -26,6 +26,18 @@
 #define INPUT                   0
 unsigned long millis();
 
+#define BTN_B 0x01
+#define BTN_Y 0x02
+#define BTN_SELECT 0x04
+#define BTN_START 0x08
+#define BTN_UP 0x10
+#define BTN_DOWN 0x20
+#define BTN_LEFT 0x40
+#define BTN_RIGHT 0x80
+#define BTN_A 0x100
+#define BTN_X 0x200
+#define BTN_L 0x400
+#define BTN_R 0x800
 
 #else
 
@@ -36,10 +48,11 @@ unsigned long millis();
 #define dprint(x)               Serial.print(x)
 #define dprintln(x)             Serial.println(x)
 
+#define USE_SNES_PAD                1
+
 #endif
 
 
-#define USE_SNES_PAD                1
 
 
 #define NUM_BUTTONS                 15
