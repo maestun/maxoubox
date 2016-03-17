@@ -164,6 +164,25 @@ int BUTT_Compare() {
 }
 
 
+int BUTT_NumPressed() {
+#ifdef USE_SNES_PAD
+    // Get the state of all buttons
+    // INVERTED, easy parsing of SINGLE button presses at ONCE
+    gSNESBits = gSNESPad.getButtons();
+    int count = 0;
+    if(gSNESBits != 0b1111000000000000) {
+        // store all the pressed buttons in a buffer
+        for(int button = BTN_B; button <= BTN_R; button = (button << 1)) {
+            if(gSNESBits & button) {
+              count++;
+            }
+        }
+    }
+
+    return count;
+#endif
+}
+
 
 
 
@@ -289,13 +308,12 @@ void maxou_loop() {
 
         int count = 0;
         // check that all seq buttons are pressed
-        for(int idx = 0; idx < gSequenceIndex; idx++) {
+        for(int idx = 0; idx < BUTT_NumPressed(); idx++) {
             if(BUTT_IsPressed(SEQUENCE[idx])) {
                 count++;
                 LED_Enable(SEQUENCE[idx], true);
             }
             else {
-                dprintln(F("** SEQ BROKEN"));
                 for (int led = 0; led < NUM_BUTTONS; led++) {
                     LED_Enable(led, false);
                 } 
@@ -306,7 +324,7 @@ void maxou_loop() {
 
         gSequenceIndex = count;
         if(gSequenceIndex == 0) {
-            // ignore
+            dprintln(F("** SEQ BROKEN"));
         }
         else if(gSequenceIndex == gSequenceLength) {
             dprintln(F("** SEQ OKAY ! win **"));
