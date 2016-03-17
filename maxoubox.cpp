@@ -8,23 +8,22 @@
 
 #include "maxoubox.h"
 
-#ifdef USE_SNES_PAD
-  SNESpaduino gSNESPad(2, 3, 4); // latch, clock, data
-  uint16_t    gSNESBits;
-  const int   SEQUENCE[] =                    {BTN_Y, BTN_X, BTN_A, BTN_B, BTN_UP};
-#else
-  const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
+#ifdef USE_LCD
+
+  #include "LiquidCrystal_I2C.h"
+    // Set the LCD address to 0x27 for a 16 chars and 2 line display
+    // SCL => A5
+    // SDA => A4
+    LiquidCrystal_I2C         gLCD(0x27, 16, 2);
 #endif
 
 
-#ifdef __APPLE__
-unsigned long millis() {
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    __int64_t milliSeconds = (__int64_t)((__int64_t)time.tv_sec * (__int64_t)1000);
-    __int64_t returnValue = milliSeconds + (time.tv_usec / 1000);
-    return (unsigned long) returnValue;
-}
+#ifdef USE_SNES_PAD
+    SNESpaduino gSNESPad(2, 3, 4); // latch, clock, data
+    uint16_t    gSNESBits;
+    const int   SEQUENCE[] =                    {BTN_Y, BTN_X, BTN_A, BTN_B, BTN_UP};
+#else
+    const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
 #endif
 
 
@@ -56,41 +55,49 @@ unsigned long long superMillis() {
 // ============================================================================
 void LCD_Setup() {
     dprintln(F("LCD_Setup"));
+#ifdef USE_LCD
+    gLCD.init();
+    gLCD.backlight();
+#endif
+}
+
+void LCD_Clear() {
+#ifdef USE_LCD
+    gLCD.clear();
+#endif
 }
 
 
 void LCD_Display(const char * aLine1, const char * aLine2) {
-#ifdef __APPLE__
-    printf("%s\n", aLine1);
-    printf("%s\n", aLine2);
-#else
     /*dprint(F("LCD1: "));
     dprintln(aLine1);
     dprint(F("LCD2: "));
     dprintln(aLine2);*/
+#ifdef USE_LCD
+    if(aLine1 != NULL) {
+        gLCD.setCursor(0, 0);
+        gLCD.print(aLine1);
+    }
+    if(aLine2 != NULL) {
+        gLCD.setCursor(0, 1);
+        gLCD.print(aLine2);
+    }
 #endif
 }
 
 
 void LED_Setup() {
     dprintln(F("LED_Setup"));
-#ifdef __APPLE__
-#else
-#endif
 }
 
 
 void LED_Enable(int aLed, bool aEnable) {
-#ifdef __APPLE__
-    printf("LED_Enable %d: %s\n", aLed, aEnable ? "ON" : "OFF");
-#else
     /*
     dprint(F("LED_Enable "));
     Serial.print(aLed, DEC);
     dprint(F(": "));
     dprintln(aEnable ? F("ON") : F("OFF"));
     */
-#endif
 }
 
 
@@ -104,9 +111,10 @@ void LED_EnableAll(bool aEnable) {
 
 void BUTT_Setup() {
     dprintln(F("BUTT_Setup"));
-#ifdef __APPLE__
-#else
-#endif
+
+    // +5vcc of SNES pad to pin 12 !!
+    pinMode(12, OUTPUT);
+    digitalWrite(12, HIGH);
 }
 
 
@@ -129,9 +137,6 @@ int BUTT_NumPressed() {
     return count;
 #endif
 }
-
-
-
 
 
 bool BUTT_IsPressed(int aButton) {
@@ -214,19 +219,14 @@ void maxou_loop() {
     while(BUTT_IsPressed(-1) == 0) {
         delay(1);
     }
-    
+
+    LCD_Clear();
 
     // ====================================================================
     // 1 - launch chronometer
-    gChronoStartMS = millis();
+    gChronoStartMS = superMillis();
     gRemainingSEC = CHRONO_DURATION_SEC;
 
-/*
-    dprint(F("CHRONO START "));
-    Serial.print(gChronoStartMS, DEC);
-    dprint(F(" / "));
-    Serial.println(gRemainingSEC, DEC);
-*/
     gWon = false;
     while (gRemainingSEC != 0 && gWon == false) {
 
@@ -253,9 +253,9 @@ void maxou_loop() {
 
         // ====================================================================
         // 1.2 - check the sequence match result
-        // gSequenceIndex = count;
         if(gSequenceIndex == 0) {
             // dprintln(F("** SEQ BROKEN"));
+            LCD_Display(MESSAGE_EMPTY, NULL);
         }
         else if(gSequenceIndex == gSequenceLength) {
             dprintln(F("** SEQ OKAY ! win **"));
@@ -263,12 +263,17 @@ void maxou_loop() {
         }
         else {
             //dprintln(F("** SEQ IN PROGRESS"));
+            char buf[16] = "";
+            for(int i=0; i < gSequenceIndex;i++)
+              buf[i] = '.';
+            buf[gSequenceIndex] = '\0';
+            LCD_Display(buf, NULL);
         }
 
 
         // ====================================================================
         // 1.3 - time management - check if a second has elapsed
-        gTimestamp = millis();
+        gTimestamp = superMillis();
         if(gTimestamp - gChronoStartMS > 1000) {
             gChronoStartMS = gTimestamp;
             gRemainingSEC--;
@@ -276,7 +281,7 @@ void maxou_loop() {
             if(gRemainingSEC == 0) {
                 dprintln(F("CHRONO ZERO !"));
             }
-            
+
             unsigned int seconds = (unsigned int)(gRemainingSEC % 60);
             unsigned int minutes = (unsigned int)(gRemainingSEC / 60);
             char buf[16] = "";
@@ -285,7 +290,7 @@ void maxou_loop() {
             dprint("time: ");
             dprintln(buf);
             
-            LCD_Display(MESSAGE_EMPTY, buf);
+            LCD_Display(NULL, buf);
         }
     }
 
