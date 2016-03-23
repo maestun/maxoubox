@@ -58,7 +58,6 @@ uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16
 #endif
 
 // sequence: 0...NUM_BUTTON
-uint32_t	gButtons;
 const int   SEQUENCE[] =                    {3, 6, 11, 1};
 
 
@@ -328,6 +327,9 @@ void maxou_setup() {
 
 void maxou_loop() {
 __reset:
+    LED_EnableAll(false);
+    BUTT_Update();
+    
     // ====================================================================
     // 0 - hello screen
     LCD_Display(MESSAGE_HELLO_LINE_1, MESSAGE_HELLO_LINE_2);
@@ -336,6 +338,7 @@ __reset:
     }
     
     // sleep until a button is pressed
+    
     while(BUTT_IsPressed(-1) == false) {
         BUTT_Update();
         delay(10);
@@ -376,6 +379,10 @@ __reset:
                     break;
                 }
             }
+        }
+
+        if(BUTT_NumPressed() == 0) {
+            LED_EnableAll(false);
         }
         
         // if seq broken, wait for all buttons to be released before letting users play again
@@ -446,10 +453,6 @@ __reset:
         // show win message
         LCD_Display(MESSAGE_WIN_LINE_1, MESSAGE_WIN_LINE_2);
         delay(MESSAGE_DURATION_SEC * 1000);
-        
-        // attendre un peu avant de reset
-        delay(RESET_DURATION_SEC * 1000);
-      
     }
     else {
         // chronometer has elapsed: all LEDs off
@@ -458,17 +461,16 @@ __reset:
         // blink zero LCD TODO: ya pas + simple dans la lib ?
         for (int i = 0; i < 6; i++) {
             LCD_Display(MESSAGE_EMPTY, "0:00");
-            delay(500);
+            LED_EnableAll(true);
+            delay(300);
             LCD_Display(MESSAGE_EMPTY, MESSAGE_EMPTY);
-            delay(500);
+            LED_EnableAll(false);
+            delay(300);
         }
 
         // show lose message
         LCD_Display(MESSAGE_LOST_LINE_1, MESSAGE_LOST_LINE_2);
         delay(MESSAGE_DURATION_SEC * 1000);
-        
-        // attendre un peu avant de reset
-        delay(RESET_DURATION_SEC * 1000);
     }
 }
 
@@ -510,7 +512,7 @@ void maxou_test_lcd() {
 }
 
 void maxou_test_butt() {
-    gButtons = 0;
+    
     
     // latch
     digitalWrite(PIN_BUTT_LATCH, HIGH);
