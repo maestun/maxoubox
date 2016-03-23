@@ -8,13 +8,49 @@
 
 #include "maxoubox.h"
 
-#ifdef USE_LCD
+// ============================================================================
+#pragma mark - CONFIGURATION
+// ============================================================================
+#define PIN_LED_LATCH 				2
+#define PIN_LED_CLOCK 				3
+#define PIN_LED_DATA				4
 
-  #include "LiquidCrystal_I2C.h"
+#define PIN_BUTT_LATCH 				5
+#define PIN_BUTT_CLOCK 				6
+#define PIN_BUTT_DATA				7
+
+#define PIN_RESET					8
+
+#define USE_SNES_PAD                1
+#define USE_LCD                     1
+
+#define NUM_BUTTONS                 15
+#define CHRONO_DURATION_SEC         (unsigned long)(180)
+#define MESSAGE_DURATION_SEC        (unsigned long)(10)
+
+#define MESSAGE_EMPTY               ("                ")
+#define MESSAGE_HELLO_LINE_1        ("Bienvenue       ")
+#define MESSAGE_HELLO_LINE_2        ("sur la MaxouBox!")
+
+#define MESSAGE_LOST_LINE_1         ("CHRONOMETRE     ")
+#define MESSAGE_LOST_LINE_2         ("EXPIRE :-(      ")
+
+#define MESSAGE_WIN_LINE_1          ("Indice:         ")
+#define MESSAGE_WIN_LINE_2          ("PAPRIKA MOULU   ")
+
+#define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
+#define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
+
+
+// TODO: import http://playground.arduino.cc/Main/ShiftOutX
+// shiftOutX gShiftOut(PIN_LED_LATCH, PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, 4); 
+
+#ifdef USE_LCD
+	#include "LiquidCrystal_I2C.h"
     // Set the LCD address to 0x27 for a 16 chars and 2 line display
     // SCL => A5
     // SDA => A4
-    LiquidCrystal_I2C         gLCD(0x27, 16, 2);
+	LiquidCrystal_I2C         gLCD(0x27, 16, 2);
 #endif
 
 
@@ -23,6 +59,8 @@
     uint16_t    gSNESBits;
     const int   SEQUENCE[] =                    {BTN_Y, BTN_X, BTN_A, BTN_B, BTN_UP};
 #else
+	// sequence: 0...NUM_BUTTONS
+	uint32_t	gButtons;
     const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
 #endif
 
@@ -32,7 +70,7 @@
  *
  * @return Le nombre de millisecondes depuis le démarrage du programme sous la forme d'un
  * nombre entier sur 64 bits (unsigned long long).
- */
+ *
 unsigned long long superMillis() {
     static unsigned long nbRollover = 0;
     static unsigned long previousMillis = 0;
@@ -48,6 +86,7 @@ unsigned long long superMillis() {
     finalMillis +=  currentMillis;
     return finalMillis;
 }
+*/
 
 
 // ============================================================================
@@ -88,24 +127,68 @@ void LCD_Display(const char * aLine1, const char * aLine2) {
 
 void LED_Setup() {
     dprintln(F("LED_Setup"));
+	pinMode(PIN_LED_LATCH, OUTPUT);
+	pinMode(PIN_LED_CLOCK, OUTPUT);
+	pinMode(PIN_LED_DATA, OUTPUT);
+}
+
+
+#define SET_BIT(val, bit) 		((val) |= (1 << (bit)))
+#define CLR_BIT(val, bit) 		((val) &= (~(1) << (bit)))
+#define CHK_BIT(val, bit)		((val & (1 << (bit)))
+void debug_uint32_t(uint32_t val) {
+	dprint(F("0b"));
+    for(uint8_t bit = 31; bit >= 0; bit--) {
+        dprint(CHK_BIT(val, bit) ? "1" : "0"):
+    }
+	dprintln("");
 }
 
 
 void LED_Enable(int aLed, bool aEnable) {
-    /*
+    
     dprint(F("LED_Enable "));
     Serial.print(aLed, DEC);
     dprint(F(": "));
     dprintln(aEnable ? F("ON") : F("OFF"));
-    */
+    
+	/*if(aEnable) {
+		gShiftOut.pinOn(aLed);
+	}
+	else {
+		gShiftOut.pinOff(aLed);
+	}*/
+	// update LED buffer
+	static uint32_t sBuffer = 0;
+	if(aEnable) {
+		SET_BIT(sBuffer, aLed);
+	}
+	else {
+		CLR_BIT(sBuffer, aLed);
+	}
+	debug_uint32_t(sBuffer);
+	
+	// output 3 bytes
+	digitalWrite(PIN_LED_LATCH, LOW);
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)(sBuffer & 0xff));
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 8) & 0xff));
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 16) & 0xff));
+	// shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 24) & 0xff));
+	digitalWrite(PIN_LED_LATCH, HIGH);
+	delay(50);
 }
 
 
 void LED_EnableAll(bool aEnable) {
+	uint8_t output = aEnable ? 0xff : 0x0;
     dprintln(aEnable ? F("ENABLE ALL LEDS") : F("DISABLE ALL LEDS"));
-    for (int led = 0; led < NUM_BUTTONS; led++) {
-        LED_Enable(led, aEnable);
-    } 
+	digitalWrite(PIN_LED_LATCH, LOW);
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	// shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	digitalWrite(PIN_LED_LATCH, HIGH);
+	delay(50);
 }
 
 
@@ -113,8 +196,14 @@ void BUTT_Setup() {
     dprintln(F("BUTT_Setup"));
 
     // +5vcc of SNES pad to pin 12 !!
+#ifdef USE_SNES_PAD
     pinMode(12, OUTPUT);
     digitalWrite(12, HIGH);
+#else
+	pinMode(PIN_BUTT_LATCH, OUTPUT);
+	pinMode(PIN_BUTT_CLOCK, OUTPUT);
+	pinMode(PIN_BUTT_DATA, INPUT);	
+#endif
 }
 
 
@@ -208,6 +297,7 @@ void maxou_setup() {
 
 
 void maxou_loop() {
+__reset:
     // ====================================================================
     // 0 - hello screen
     LCD_Display(MESSAGE_HELLO_LINE_1, MESSAGE_HELLO_LINE_2);
@@ -224,7 +314,7 @@ void maxou_loop() {
 
     // ====================================================================
     // 1 - launch chronometer
-    gChronoStartMS = superMillis();
+    gChronoStartMS = millis();
     gRemainingSEC = CHRONO_DURATION_SEC;
 
     gWon = false;
@@ -273,7 +363,7 @@ void maxou_loop() {
 
         // ====================================================================
         // 1.3 - time management - check if a second has elapsed
-        gTimestamp = superMillis();
+        gTimestamp = millis();
         if(gTimestamp - gChronoStartMS > 1000) {
             gChronoStartMS = gTimestamp;
             gRemainingSEC--;
@@ -292,9 +382,17 @@ void maxou_loop() {
             
             LCD_Display(NULL, buf);
         }
+		
+		
+		// ====================================================================
+        // 1.4 - hacky dirty spooky reset management :p
+		if(digitalRead(PIN_RESET)) {
+			goto __reset;
+		}
     }
 
-    dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
+    
+	dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
 
     
     // ====================================================================

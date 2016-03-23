@@ -34,34 +34,7 @@ unsigned long millis();
 
 #endif
 
-
-#define USE_SNES_PAD                1
-#define USE_LCD                     1
-
-
-#define NUM_BUTTONS                 15
-#define CHRONO_DURATION_SEC         (unsigned long)(180)
-#define MESSAGE_DURATION_SEC        (unsigned long)(10)
-
-#define MESSAGE_EMPTY               ("                ")
-#define MESSAGE_HELLO_LINE_1        ("Bienvenue       ")
-#define MESSAGE_HELLO_LINE_2        ("sur la MaxouBox!")
-
-#define MESSAGE_LOST_LINE_1         ("CHRONOMETRE     ")
-#define MESSAGE_LOST_LINE_2         ("EXPIRE :-(      ")
-
-#define MESSAGE_WIN_LINE_1          ("Indice:         ")
-#define MESSAGE_WIN_LINE_2          ("PAPRIKA MOULU   ")
-
-#define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
-#define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
-
-
 // prototypes
-
-// checks if the given button is pressed. Pass -1 as parameter to check any button
-
-
 void maxou_setup();
 void maxou_loop();
 
