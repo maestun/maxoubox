@@ -59,7 +59,7 @@ uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16
 
 // sequence: 0...NUM_BUTTON
 uint32_t	gButtons;
-const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
+const int   SEQUENCE[] =                    {3, 6, 11, 1};
 
 
 // ============================================================================
@@ -144,22 +144,43 @@ void LED_Enable(int aLed, bool aEnable) {
     dprint(F(": "));
     dprintln(aEnable ? F("ON") : F("OFF"));
 */
-    int idx = aLed / 8;
-    int dec = aLed - (8 * idx);
-    gLedBuf[idx] = aEnable ? (gLedBuf[idx] | (1 << dec)) : (gLedBuf[idx] & ~(1 << dec));
-
-    digitalWrite(PIN_LED_LATCH, LOW);
-    for(int i = 0; i < 4; i++) {
-      shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, LSBFIRST, gLedBuf[i]);
+    int bytenum = aLed / 8;
+    int bitnum = aLed - (8 * bytenum);
+    //static uint8_t gLedBuf[4] = {0, 0, 0, 0};
+    bool is_set = CHK_BIT(gLedBuf[bytenum], bitnum);
+    bool upd = false;
+    if(is_set && !aEnable) {
+        // led is on, disable it
+        CLR_BIT(gLedBuf[bytenum], bitnum);
+        upd = true;
     }
-    digitalWrite(PIN_LED_LATCH, HIGH);
-	  delay(20);
+    else if(is_set == false && aEnable) {
+        // led is off, enable it
+        SET_BIT(gLedBuf[bytenum], bitnum);
+        upd = true;
+    }
+    
+    //gLedBuf[idx] = aEnable ? (gLedBuf[idx] | (1 << dec)) : (gLedBuf[idx] & ~(1 << dec));
+    if(upd) {
+        digitalWrite(PIN_LED_LATCH, LOW);
+        for(int i = 0; i < 4; i++) {
+            shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, LSBFIRST, gLedBuf[i]);
+        }
+        digitalWrite(PIN_LED_LATCH, HIGH);
+    }
 }
 
 
 void LED_EnableAll(bool aEnable) {
-	  uint8_t output = aEnable ? 0xff : 0x0;
     dprintln(aEnable ? F("ENABLE ALL LEDS") : F("DISABLE ALL LEDS"));
+	  uint8_t output = aEnable ? 0xff : 0x0;
+    digitalWrite(PIN_LED_LATCH, LOW);
+    for(int i = 0; i < 4; i++) {
+          gLedBuf[i] = output;
+          shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+    }
+    digitalWrite(PIN_LED_LATCH, HIGH);
+    /*
 	  digitalWrite(PIN_LED_LATCH, LOW);
 	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
 	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
@@ -168,6 +189,7 @@ void LED_EnableAll(bool aEnable) {
 	  // shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
 	  digitalWrite(PIN_LED_LATCH, HIGH);
 	  delay(50);
+    */
 }
 
 
@@ -193,7 +215,7 @@ void BUTT_Update() {
         for(int bitnum = 0; bitnum < 8; bitnum++) {
             if(digitalRead(PIN_BUTT_DATA)) {
                 SET_BIT(gButtBuf[bytenum], bitnum);
-                dprintln(F("Pressing "));
+                dprint(F("Pressing "));
                 Serial.println(((bytenum * 8) + bitnum), DEC);
             }
             
@@ -207,7 +229,6 @@ void BUTT_Update() {
 
 int BUTT_NumPressed() {
     int count = 0;
-    BUTT_Update();
     // loop thru n bytes
     for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
         // loop thru 8 bits
@@ -217,11 +238,37 @@ int BUTT_NumPressed() {
             }
         }
     }
+
+if(count>0) {
+  dprint(F("numpress "));
+  Serial.println(count, DEC);
+}
+    
     return count;
 }
 
 
 bool BUTT_IsPressed(int aButton) {
+    int bytenum = aButton / 8;
+    int bitnum = aButton - (bytenum * 8);
+
+    if(aButton == -1) {
+        for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) { 
+            for(int bitnum = 0; bitnum < 8; bitnum++) {
+                if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
+                    dprintln("any press");
+                    return true;
+                }
+            }
+        }
+    }
+    else if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
+        Serial.print(aButton, DEC);
+        dprintln(" pressed *****");
+        return true;
+    }
+    return false;
+  
     // latch
     digitalWrite(PIN_BUTT_LATCH, HIGH);
     digitalWrite(PIN_BUTT_LATCH, LOW);
@@ -234,8 +281,8 @@ bool BUTT_IsPressed(int aButton) {
                     return true;
                 }
                 else if(aButton == ((bytenum * 8) + bitnum)) {
-                  Serial.println(aButton, DEC);
-                  dprintln("pressed");
+                  Serial.print(aButton, DEC);
+                  dprintln(" pressed *****");
                   return false;
                 }
             }
@@ -276,7 +323,6 @@ void maxou_setup() {
         delay(MESSAGE_DURATION_SEC * 1000);
         maxou_test_butt();
     }
-
 }
 
 
@@ -291,6 +337,7 @@ __reset:
     
     // sleep until a button is pressed
     while(BUTT_IsPressed(-1) == false) {
+        BUTT_Update();
         delay(10);
     }
 
@@ -302,27 +349,39 @@ __reset:
     gRemainingSEC = CHRONO_DURATION_SEC;
 
     gWon = false;
+    bool seq_broken = false;
     while (gRemainingSEC != 0 && gWon == false) {
-        delay(1);
+        delay(10);
 
         // ====================================================================
         // 1.1 - read the currently pressed buttons
         gSequenceIndex = 0;
         // loop thru all pressed buttons
-        for(int idx = 0; idx < BUTT_NumPressed(); idx++) {
-            // does the current pressed button matches the order in sequence ?
-            if(BUTT_IsPressed(SEQUENCE[idx])) {
-                gSequenceIndex++;
-                LED_Enable(SEQUENCE[idx], true);
-            }
-            else {
-                dprintln(F("** WRONG BUTTON, SEQ BROKEN"));
-                LED_EnableAll(false);
-                gSequenceIndex = 0;
-                break;
+        BUTT_Update();
+        if(seq_broken == false) {
+            for(int idx = 0; idx < BUTT_NumPressed(); idx++) {
+                // does the current pressed button matches the order in sequence ?
+                if(BUTT_IsPressed(SEQUENCE[idx])) {
+                    dprintln(F("SEQ++"));
+                    gSequenceIndex++;
+                    //LED_Enable(SEQUENCE[idx], true);
+                    LED_Enable(LED_BY_BUTTON[SEQUENCE[idx]], true);
+                }
+                else {
+                    seq_broken = true;
+                    dprintln(F("** WRONG BUTTON, SEQ BROKEN"));
+                    LED_EnableAll(false);
+                    //LED_Enable(LED_BY_BUTTON[SEQUENCE[idx]], false);
+                    gSequenceIndex = 0;
+                    break;
+                }
             }
         }
-
+        
+        // if seq broken, wait for all buttons to be released before letting users play again
+        if(seq_broken && BUTT_NumPressed() == 0) {
+            seq_broken = false;
+        }
 
         // ====================================================================
         // 1.2 - check the sequence match result
@@ -337,7 +396,7 @@ __reset:
         else {
             //dprintln(F("** SEQ IN PROGRESS"));
             char buf[16] = "";
-            for(int i=0; i < gSequenceIndex;i++)
+            for(int i = 0; i < gSequenceIndex;i++)
               buf[i] = '.';
             buf[gSequenceIndex] = '\0';
             LCD_Display(buf, NULL);
@@ -360,8 +419,8 @@ __reset:
             char buf[16] = "";
             sprintf(buf, "%d:%02d", minutes, seconds);
 
-            dprint("time: ");
-            dprintln(buf);
+            //dprint("time: ");
+            //dprintln(buf);
             
             LCD_Display(NULL, buf);
         }
@@ -413,22 +472,20 @@ __reset:
     }
 }
 
-void maxou_test_led_old() {
+void maxou_test_led() {
     LED_EnableAll(true);
-    delay(10000);
-    LED_EnableAll(false);
-    for(uint8_t button = 0; button < NUM_BUTTONS; button++) {
-        LED_Enable(button, true);
-        delay(2000);
-    }
-    for(uint8_t button = 0; button < NUM_BUTTONS; button++) {
-        LED_Enable(button, false);
-        delay(2000);
-    }
     delay(1000);
+    LED_EnableAll(false);
+    delay(1000);
+
+    for(int i = 0; i < NUM_BUTTONS; i++) {
+        LED_Enable(LED_BY_BUTTON[i], true);
+        delay(1000);
+        LED_Enable(LED_BY_BUTTON[i], false);
+    }
 }
 
-void maxou_test_led() {
+void maxou_test_led2() {
   
   // TODO: déterminer quels sont les bon n°s de LED !!!
   // TODO: tester avec LSB/MSB
@@ -485,20 +542,7 @@ void maxou_test_butt() {
         digitalWrite(PIN_BUTT_CLOCK, HIGH);
         digitalWrite(PIN_BUTT_CLOCK, LOW);  
       }
-      
-      /*
-      dprint(F("0b"));
-      for(int b = 7; b >= 0; b--) {
-          if(CHK_BIT(gButtBuf[bytenum], b)) {
-            dprint("1");
-          }
-          else {
-            dprint("0");
-          }
-      }
-      dprint(" - ");
-      */
-      
+
     }
     //dprintln(" ");
 
