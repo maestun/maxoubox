@@ -21,10 +21,9 @@
 
 #define PIN_RESET					8
 
-#define USE_SNES_PAD                1
 #define USE_LCD                     1
 
-#define NUM_BUTTONS                 15
+#define NUM_BUTTONS                 20
 #define CHRONO_DURATION_SEC         (unsigned long)(180)
 #define MESSAGE_DURATION_SEC        (unsigned long)(10)
 
@@ -53,40 +52,9 @@
 	LiquidCrystal_I2C         gLCD(0x27, 16, 2);
 #endif
 
-
-#ifdef USE_SNES_PAD
-    SNESpaduino gSNESPad(2, 3, 4); // latch, clock, data
-    uint16_t    gSNESBits;
-    const int   SEQUENCE[] =                    {BTN_Y, BTN_X, BTN_A, BTN_B, BTN_UP};
-#else
-	// sequence: 0...NUM_BUTTONS
-	uint32_t	gButtons;
-    const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
-#endif
-
-
-/**
- * Retourne le nombre de millisecondes depuis le démarrage du programme.
- *
- * @return Le nombre de millisecondes depuis le démarrage du programme sous la forme d'un
- * nombre entier sur 64 bits (unsigned long long).
- *
-unsigned long long superMillis() {
-    static unsigned long nbRollover = 0;
-    static unsigned long previousMillis = 0;
-    unsigned long currentMillis = millis();
-    
-    if (currentMillis < previousMillis) {
-        nbRollover++;
-    }
-    previousMillis = currentMillis;
-    
-    unsigned long long finalMillis = nbRollover;
-    finalMillis <<= 32;
-    finalMillis +=  currentMillis;
-    return finalMillis;
-}
-*/
+// sequence: 0...NUM_BUTTON
+uint32_t	gButtons;
+const int   SEQUENCE[] =                    {3, 6, 11, 1, 12, 7};
 
 
 // ============================================================================
@@ -99,6 +67,7 @@ void LCD_Setup() {
     gLCD.backlight();
 #endif
 }
+
 
 void LCD_Clear() {
 #ifdef USE_LCD
@@ -125,25 +94,41 @@ void LCD_Display(const char * aLine1, const char * aLine2) {
 }
 
 
+uint8_t gLedBuf[4] = {0, 0, 0, 0};
 void LED_Setup() {
     dprintln(F("LED_Setup"));
-	pinMode(PIN_LED_LATCH, OUTPUT);
-	pinMode(PIN_LED_CLOCK, OUTPUT);
-	pinMode(PIN_LED_DATA, OUTPUT);
+	  pinMode(PIN_LED_LATCH, OUTPUT);
+	  pinMode(PIN_LED_CLOCK, OUTPUT);
+	  pinMode(PIN_LED_DATA, OUTPUT);
 }
 
 
-#define SET_BIT(val, bit) 		((val) |= (1 << (bit)))
-#define CLR_BIT(val, bit) 		((val) &= (~(1) << (bit)))
-#define CHK_BIT(val, bit)		((val & (1 << (bit)))
+#define CHK_BIT(val, b) 		(val & (1 << (b)))
 void debug_uint32_t(uint32_t val) {
-	dprint(F("0b"));
-    for(uint8_t bit = 31; bit >= 0; bit--) {
-        dprint(CHK_BIT(val, bit) ? "1" : "0"):
+	  dprint(F("0b"));
+    for(uint8_t b = 31; b >= 0; b--) {
+        if(CHK_BIT(val, b)) {
+            dprint("1");
+        }
+        else {
+            dprint("0");
+        }
     }
-	dprintln("");
+	  dprintln("next");
 }
 
+void debug8(uint8_t val) {
+    dprint(F("0b"));
+    for(int b = 7; b >= 0; b--) {
+        if(CHK_BIT(val, b)) {
+            dprint("1");
+        }
+        else {
+            dprint("0");
+        }
+    }
+    dprintln(";");
+}
 
 void LED_Enable(int aLed, bool aEnable) {
     
@@ -151,61 +136,42 @@ void LED_Enable(int aLed, bool aEnable) {
     Serial.print(aLed, DEC);
     dprint(F(": "));
     dprintln(aEnable ? F("ON") : F("OFF"));
-    
-	/*if(aEnable) {
-		gShiftOut.pinOn(aLed);
-	}
-	else {
-		gShiftOut.pinOff(aLed);
-	}*/
-	// update LED buffer
-	static uint32_t sBuffer = 0;
-	if(aEnable) {
-		SET_BIT(sBuffer, aLed);
-	}
-	else {
-		CLR_BIT(sBuffer, aLed);
-	}
-	debug_uint32_t(sBuffer);
-	
-	// output 3 bytes
-	digitalWrite(PIN_LED_LATCH, LOW);
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)(sBuffer & 0xff));
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 8) & 0xff));
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 16) & 0xff));
-	// shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, (uint8_t)((sBuffer >> 24) & 0xff));
-	digitalWrite(PIN_LED_LATCH, HIGH);
-	delay(50);
+
+    int idx = aLed / 8;
+    int dec = aLed - (8 * idx);
+    gLedBuf[idx] = aEnable ? (gLedBuf[idx] | (1 << dec)) : (gLedBuf[idx] & ~(1 << dec));
+
+    digitalWrite(PIN_LED_LATCH, LOW);
+    for(int i = 0; i < 4; i++) {
+      debug8(gLedBuf[i]);
+      shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, gLedBuf[i]);
+
+    }
+    digitalWrite(PIN_LED_LATCH, HIGH);
+	  delay(20);
 }
 
 
 void LED_EnableAll(bool aEnable) {
-	uint8_t output = aEnable ? 0xff : 0x0;
+	  uint8_t output = aEnable ? 0xff : 0x0;
     dprintln(aEnable ? F("ENABLE ALL LEDS") : F("DISABLE ALL LEDS"));
-	digitalWrite(PIN_LED_LATCH, LOW);
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	// shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	digitalWrite(PIN_LED_LATCH, HIGH);
-	delay(50);
+	  digitalWrite(PIN_LED_LATCH, LOW);
+	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+    shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	  // shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
+	  digitalWrite(PIN_LED_LATCH, HIGH);
+	  delay(50);
 }
 
 
 void BUTT_Setup() {
     dprintln(F("BUTT_Setup"));
-
-    // +5vcc of SNES pad to pin 12 !!
-#ifdef USE_SNES_PAD
-    pinMode(12, OUTPUT);
-    digitalWrite(12, HIGH);
-#else
-	pinMode(PIN_BUTT_LATCH, OUTPUT);
-	pinMode(PIN_BUTT_CLOCK, OUTPUT);
-	pinMode(PIN_BUTT_DATA, INPUT);	
-#endif
+	  pinMode(PIN_BUTT_LATCH, OUTPUT);
+	  pinMode(PIN_BUTT_CLOCK, OUTPUT);
+	  pinMode(PIN_BUTT_DATA, INPUT);	
 }
-
 
 
 int BUTT_NumPressed() {
@@ -222,7 +188,6 @@ int BUTT_NumPressed() {
             }
         }
     }
-
     return count;
 #endif
 }
@@ -287,12 +252,14 @@ void maxou_setup() {
     LCD_Setup();
     
     // debug mode ?
+    /*
     if(BUTT_IsPressed(-1)) {
         LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
         LED_EnableAll(true);
         delay(MESSAGE_DURATION_SEC * 1000);
         LCD_Display(MESSAGE_EMPTY, MESSAGE_EMPTY);
     }
+    */
 }
 
 
@@ -392,7 +359,7 @@ __reset:
     }
 
     
-	dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
+	  dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
 
     
     // ====================================================================
@@ -435,6 +402,69 @@ __reset:
     }
 }
 
+void maxou_test_led_old() {
+    LED_EnableAll(true);
+    delay(10000);
+    LED_EnableAll(false);
+    for(uint8_t button = 0; button < NUM_BUTTONS; button++) {
+        LED_Enable(button, true);
+        delay(2000);
+    }
+    for(uint8_t button = 0; button < NUM_BUTTONS; button++) {
+        LED_Enable(button, false);
+        delay(2000);
+    }
+    delay(1000);
+}
 
+void maxou_test_led() {
+
+
+  LED_EnableAll(false);
+  for(int i= 0; i < 32; i++) {
+    LED_Enable(i, true);
+    delay(20);
+  }
+
+
+  for(;;) {
+    
+  }
+  /*
+  
+    LED_EnableAll(true);
+    delay(2000);
+    LED_EnableAll(false);
+    pinMode(PIN_RESET, INPUT);
+    int led = 0;
+    bool enable = true;
+    for(;;) {
+        if(digitalRead(PIN_RESET)) {
+            delay(1000); // debounce
+            LED_Enable(led, enable);
+            led++;
+            if(led == NUM_BUTTONS) {
+                dprintln("RESET");
+                led = 0;
+                enable = !enable;
+            }
+        }
+        delay(10);
+    }*/
+}
+
+
+
+
+void maxou_test_butt() {
+    for(uint8_t button = 0; button < NUM_BUTTONS; button++) {
+        if(BUTT_IsPressed(button)) {
+            LED_Enable(button, true);
+        }
+        else {
+            LED_Enable(button, false);
+        }
+    }
+}
 // EOF
 

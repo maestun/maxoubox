@@ -37,5 +37,7 @@ unsigned long millis();
 // prototypes
 void maxou_setup();
 void maxou_loop();
+void maxou_test_led();
+void maxou_test_butt();
 
 
