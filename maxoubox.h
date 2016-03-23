@@ -25,8 +25,8 @@ unsigned long millis();
 #else
 
 #include "Arduino.h"
-#include "SNESpaduino.h"
-
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
 
 #define dprintinit(x)           Serial.begin(x)
 #define dprint(x)               Serial.print(x)

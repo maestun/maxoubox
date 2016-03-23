@@ -176,6 +176,7 @@ void BUTT_Setup() {
 	  pinMode(PIN_BUTT_LATCH, OUTPUT);
 	  pinMode(PIN_BUTT_CLOCK, OUTPUT);
 	  pinMode(PIN_BUTT_DATA, INPUT);	
+    pinMode(PIN_RESET, INPUT);  
 }
 
 
@@ -318,7 +319,7 @@ bool                gWon            = false;
 unsigned int        gSequenceIndex  = 0;
 const unsigned int  gSequenceLength = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
 
-
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 void maxou_setup() {
     dprintinit(9600);
     
@@ -328,16 +329,15 @@ void maxou_setup() {
     
     // configure LCD
     LCD_Setup();
-    
+
     // debug mode ?
-    /*
-    if(BUTT_IsPressed(-1)) {
+    if(digitalRead(PIN_RESET)) {
         LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
         LED_EnableAll(true);
         delay(MESSAGE_DURATION_SEC * 1000);
         LCD_Display(MESSAGE_EMPTY, MESSAGE_EMPTY);
     }
-    */
+    
 }
 
 
@@ -364,7 +364,6 @@ __reset:
 
     gWon = false;
     while (gRemainingSEC != 0 && gWon == false) {
-
         delay(1);
 
         // ====================================================================
@@ -515,6 +514,7 @@ void maxou_test_led() {
 
 void maxou_test_butt() {
     gButtons = 0;
+    
     // latch
     digitalWrite(PIN_BUTT_LATCH, HIGH);
     digitalWrite(PIN_BUTT_LATCH, LOW);
@@ -532,7 +532,6 @@ void maxou_test_butt() {
         else {
           gButtBuf[bytenum] |= (0 << bitnum);
           LED_Enable(LED_BY_BUTTON[numbutt], false);
-          LCD_Clear();
         }
         numbutt++;
         digitalWrite(PIN_BUTT_CLOCK, HIGH);
