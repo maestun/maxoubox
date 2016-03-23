@@ -24,8 +24,9 @@
 #define USE_LCD                     1
 
 #define NUM_BUTTONS                 20
-#define CHRONO_DURATION_SEC         (unsigned long)(180)
+#define CHRONO_DURATION_SEC         (unsigned long)(1800)
 #define MESSAGE_DURATION_SEC        (unsigned long)(10)
+#define RESET_DURATION_SEC          (unsigned long)(10)
 
 #define MESSAGE_EMPTY               ("                ")
 #define MESSAGE_HELLO_LINE_1        ("Bienvenue       ")
@@ -108,6 +109,8 @@ void LED_Setup() {
 
 
 #define CHK_BIT(val, b) 		(val & (1 << (b)))
+#define CLR_BIT(val, b)   ((val) &= (~(1) << (b)))
+#define SET_BIT(val, b)         ((val) |= (1 << (b)))
 void debug32(uint32_t val) {
 	  dprint(F("0b"));
     for(uint8_t b = 31; b >= 0; b--) {
@@ -147,9 +150,7 @@ void LED_Enable(int aLed, bool aEnable) {
 
     digitalWrite(PIN_LED_LATCH, LOW);
     for(int i = 0; i < 4; i++) {
-      //debug8(gLedBuf[i]);
       shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, LSBFIRST, gLedBuf[i]);
-
     }
     digitalWrite(PIN_LED_LATCH, HIGH);
 	  delay(20);
@@ -184,127 +185,65 @@ void BUTT_Update() {
     // latch
     digitalWrite(PIN_BUTT_LATCH, HIGH);
     digitalWrite(PIN_BUTT_LATCH, LOW);
-
-    for(int i = 0; i < NUM_BUTTONS; i++) {
-        // Read a button's state, shift it into the variable
-        gButtons |= digitalRead(PIN_BUTT_DATA) << i;
+    
+    // loop thru n bytes
+    for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
+        gButtBuf[bytenum] = 0;
+        // loop thru 8 bits
+        for(int bitnum = 0; bitnum < 8; bitnum++) {
+            if(digitalRead(PIN_BUTT_DATA)) {
+                SET_BIT(gButtBuf[bytenum], bitnum);
+                dprintln(F("Pressing "));
+                Serial.println(((bytenum * 8) + bitnum), DEC);
+            }
             
-        // Send a clock pulse to shift out the next bit
-        digitalWrite(PIN_BUTT_CLOCK, HIGH);
-        digitalWrite(PIN_BUTT_CLOCK, LOW);
-    }
-    debug8(gButtons);
-    return;
-
-
-    // loop thru 4 bytes
-    for(int byte_num = 0; byte_num < 4; byte_num++) {
-        uint8_t b = 0;
-        // loop to receive 8 bits
-        for(int i = 0; i < 8; i++) {
-            // Read a button's state, shift it into the variable
-            b |= digitalRead(PIN_BUTT_DATA) << i;
-            
-            // Send a clock pulse to shift out the next bit
+            // clock
             digitalWrite(PIN_BUTT_CLOCK, HIGH);
             digitalWrite(PIN_BUTT_CLOCK, LOW);
         }
-        debug8(b);
-        gButtBuf[byte_num] = b;
     }
 }
 
 
 int BUTT_NumPressed() {
-#ifdef USE_SNES_PAD
-    // Get the state of all buttons
-    // INVERTED, easy parsing of SINGLE button presses at ONCE
-    gSNESBits = gSNESPad.getButtons();
     int count = 0;
-    if(gSNESBits != 0b1111000000000000) {
-        // store all the pressed buttons in a buffer
-        for(int button = BTN_B; button <= BTN_R; button = (button << 1)) {
-            if(gSNESBits & button) {
-              count++;
+    BUTT_Update();
+    // loop thru n bytes
+    for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
+        // loop thru 8 bits
+        for(int bitnum = 0; bitnum < 8; bitnum++) {
+            if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
+                count++;
             }
         }
     }
     return count;
-#else
-    BUTT_Update();
-    int count = 0;
-    bool hasbutton = false;
-    for(int byte_num = 0; byte_num < 4; byte_num++) {
-        if(gButtBuf[byte_num] != 0) {
-            hasbutton = true;
-            break;
-        }
-    }
-
-    if(hasbutton) {
-        // store all the pressed buttons in a buffer
-        for(int button = 0; button <= NUM_BUTTONS; button = (button << 1)) {
-        
-
-
-
-        }
-    }
-
-    return count;
-
-#endif
 }
 
 
 bool BUTT_IsPressed(int aButton) {
-  bool ret = false;
-#ifdef USE_SNES_PAD
-  // Get the state of all buttons
-  // INVERTED, easy parsing of SINGLE button presses at ONCE
-  gSNESBits = gSNESPad.getButtons();
-
-  if(gSNESBits != 0b1111000000000000) {
-    // a button is being pressed !
-    if(aButton == -1) {
-      // dprintln(F("any press detect"));
-      // we want to check if at least a button is being pressed, so exit now
-      ret = true;
-    }
-    else {
-      ret = (gSNESBits & aButton);
-      /*if(ret) {
-        dprint(F("button press detect: "));
-        dprintln(aButton);
-      }*/
-    }
-  }
-
-#else
-    BUTT_Update();
-    bool has_press = false;
-    for(int b = 0; b < NUM_BUTTONS; b++) {
-        // check nth bit
-        if(gButtons & (1 << (b))) {
-            has_press = true;
-            break;
+    // latch
+    digitalWrite(PIN_BUTT_LATCH, HIGH);
+    digitalWrite(PIN_BUTT_LATCH, LOW);
+    for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
+        gButtBuf[bytenum] = 0;
+        for(int bitnum = 0; bitnum < 8; bitnum++) {
+            if(digitalRead(PIN_BUTT_DATA)) {
+                if(aButton == -1) {
+                    dprintln("any press");
+                    return true;
+                }
+                else if(aButton == ((bytenum * 8) + bitnum)) {
+                  Serial.println(aButton, DEC);
+                  dprintln("pressed");
+                  return false;
+                }
+            }
+            digitalWrite(PIN_BUTT_CLOCK, HIGH);
+            digitalWrite(PIN_BUTT_CLOCK, LOW);  
         }
     }
-
-    if(has_press) {
-        dprint("has press: ");
-        if(aButton == -1) {
-            ret = true;
-            dprintln("any press");
-        }
-        else {
-            ret = (gButtons & (1 << (aButton)));
-            Serial.println(aButton, DEC);
-            dprintln("pressed");
-        }
-    }
-#endif
-    return ret;
+    return false;
 }
 
 
@@ -335,9 +274,9 @@ void maxou_setup() {
         LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
         LED_EnableAll(true);
         delay(MESSAGE_DURATION_SEC * 1000);
-        LCD_Display(MESSAGE_EMPTY, MESSAGE_EMPTY);
+        maxou_test_butt();
     }
-    
+
 }
 
 
@@ -351,8 +290,8 @@ __reset:
     }
     
     // sleep until a button is pressed
-    while(BUTT_IsPressed(-1) == 0) {
-        delay(1);
+    while(BUTT_IsPressed(-1) == false) {
+        delay(10);
     }
 
     LCD_Clear();
@@ -449,11 +388,9 @@ __reset:
         LCD_Display(MESSAGE_WIN_LINE_1, MESSAGE_WIN_LINE_2);
         delay(MESSAGE_DURATION_SEC * 1000);
         
-        // TODO: MAX ensuite on fait quoi ???
-        dprintln(F("TODO 1: MAX ensuite on fait quoi ???"));
-        while (1) {
-            delay(1);
-        }        
+        // attendre un peu avant de reset
+        delay(RESET_DURATION_SEC * 1000);
+      
     }
     else {
         // chronometer has elapsed: all LEDs off
@@ -471,11 +408,8 @@ __reset:
         LCD_Display(MESSAGE_LOST_LINE_1, MESSAGE_LOST_LINE_2);
         delay(MESSAGE_DURATION_SEC * 1000);
         
-        // TODO: MAX ensuite on fait quoi ???
-        dprintln(F("TODO 2: MAX ensuite on fait quoi ???"));
-        while (1) {
-            delay(1);
-        }
+        // attendre un peu avant de reset
+        delay(RESET_DURATION_SEC * 1000);
     }
 }
 
@@ -512,6 +446,12 @@ void maxou_test_led() {
 }
 
 
+void maxou_test_lcd() {
+  LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
+  while(1)
+    ;
+}
+
 void maxou_test_butt() {
     gButtons = 0;
     
@@ -523,15 +463,23 @@ void maxou_test_butt() {
       gButtBuf[bytenum] = 0;
       for(int bitnum = 0; bitnum < 8; bitnum++) {
         if(digitalRead(PIN_BUTT_DATA)) {
-          gButtBuf[bytenum] |= (1 << bitnum);
-          //dprint("pressed ");
-          //Serial.println(numbutt, DEC);
-          LED_Enable(LED_BY_BUTTON[numbutt], true);
-          //LCD_Write();
+          
+          if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
+              CLR_BIT(gButtBuf[bytenum], bitnum);
+              LED_Enable(LED_BY_BUTTON[numbutt], false);
+          }
+          else {
+              SET_BIT(gButtBuf[bytenum], bitnum);
+              LED_Enable(LED_BY_BUTTON[numbutt], true);
+          }
+          
+          dprint("pressed ");
+          Serial.println(numbutt, DEC);
+          
         }
         else {
           gButtBuf[bytenum] |= (0 << bitnum);
-          LED_Enable(LED_BY_BUTTON[numbutt], false);
+          //LED_Enable(LED_BY_BUTTON[numbutt], false);
         }
         numbutt++;
         digitalWrite(PIN_BUTT_CLOCK, HIGH);
