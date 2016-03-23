@@ -5,6 +5,6 @@ void setup() {
 }
 
 void loop() {
-  maxou_test_led();
+  maxou_test_butt();
 }
 
