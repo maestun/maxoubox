@@ -41,7 +41,8 @@
 #define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
 #define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
 
-
+#define SEQUENCE_COUNT              4
+uint8_t SEQUENCE[SEQUENCE_COUNT] =  {3, 6, 11, 1};
 uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16, 15, 14, 13, 12, 21, 20, 19, 18, 17};
 
 
@@ -58,7 +59,6 @@ uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16
 #endif
 
 // sequence: 0...NUM_BUTTON
-const int   SEQUENCE[] =                    {3, 6, 11, 1};
 
 
 // ============================================================================
@@ -214,8 +214,6 @@ void BUTT_Update() {
         for(int bitnum = 0; bitnum < 8; bitnum++) {
             if(digitalRead(PIN_BUTT_DATA)) {
                 SET_BIT(gButtBuf[bytenum], bitnum);
-                dprint(F("Pressing "));
-                Serial.println(((bytenum * 8) + bitnum), DEC);
             }
             
             // clock
@@ -255,39 +253,13 @@ bool BUTT_IsPressed(int aButton) {
         for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) { 
             for(int bitnum = 0; bitnum < 8; bitnum++) {
                 if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
-                    dprintln("any press");
                     return true;
                 }
             }
         }
     }
     else if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
-        Serial.print(aButton, DEC);
-        dprintln(" pressed *****");
         return true;
-    }
-    return false;
-  
-    // latch
-    digitalWrite(PIN_BUTT_LATCH, HIGH);
-    digitalWrite(PIN_BUTT_LATCH, LOW);
-    for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
-        gButtBuf[bytenum] = 0;
-        for(int bitnum = 0; bitnum < 8; bitnum++) {
-            if(digitalRead(PIN_BUTT_DATA)) {
-                if(aButton == -1) {
-                    dprintln("any press");
-                    return true;
-                }
-                else if(aButton == ((bytenum * 8) + bitnum)) {
-                  Serial.print(aButton, DEC);
-                  dprintln(" pressed *****");
-                  return false;
-                }
-            }
-            digitalWrite(PIN_BUTT_CLOCK, HIGH);
-            digitalWrite(PIN_BUTT_CLOCK, LOW);  
-        }
     }
     return false;
 }
@@ -307,6 +279,28 @@ const unsigned int  gSequenceLength = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 void maxou_setup() {
     dprintinit(9600);
+
+    // init pseudo seq
+#ifdef USE_RANDOM
+    randomSeed(analogRead(A6));
+    for(int seq = 0; seq < SEQUENCE_COUNT;) {
+        uint8_t num = random(0, NUM_BUTTONS);
+        bool found = false;
+        for(int i = 0; i < seq; i++) {
+            if(SEQUENCE[i] == num) {
+                found = true;
+                break;
+            }
+        }
+
+        if(!found) {
+            SEQUENCE[seq] = num;
+            Serial.println(SEQUENCE[seq], DEC);
+            seq++;
+        }
+    }
+#endif
+
     
     // configure GPIO
     BUTT_Setup();
@@ -320,7 +314,7 @@ void maxou_setup() {
         LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
         LED_EnableAll(true);
         delay(MESSAGE_DURATION_SEC * 1000);
-        maxou_test_butt();
+        //maxou_test_butt();
     }
 }
 
@@ -353,48 +347,68 @@ __reset:
 
     gWon = false;
     bool seq_broken = false;
+    int prev_numpress = 0;
+    
     while (gRemainingSEC != 0 && gWon == false) {
         delay(10);
 
         // ====================================================================
         // 1.1 - read the currently pressed buttons
         gSequenceIndex = 0;
-        // loop thru all pressed buttons
+
+        // get buttons
         BUTT_Update();
-        if(seq_broken == false) {
+
+        // check we didn't unpress anything since last loop
+        if(BUTT_NumPressed() < prev_numpress) {
+            // unpress occurred, sequence broken
+            dprintln(F("** SEQ BROKE RELEASE"));
+            seq_broken = true;
+            prev_numpress = 0;
+            LCD_Display(MESSAGE_EMPTY, NULL);
+            LED_EnableAll(false);
+        }
+        else {
+            // save current number of buttons pressed
+            prev_numpress = BUTT_NumPressed();
+        }
+
+        
+        // loop thru all pressed buttons
+        if(seq_broken == false) { // test: if we just broke the sequence, wait for all buttons to be released
             for(int idx = 0; idx < BUTT_NumPressed(); idx++) {
-                // does the current pressed button matches the order in sequence ?
+                // does the current pressed button matches the order in sequence AND
+                // is seq index equal to num pressed ?
                 if(BUTT_IsPressed(SEQUENCE[idx])) {
-                    dprintln(F("SEQ++"));
                     gSequenceIndex++;
-                    //LED_Enable(SEQUENCE[idx], true);
+                    dprint(F("SEQ++ "));
+                    Serial.println(gSequenceIndex, DEC);
                     LED_Enable(LED_BY_BUTTON[SEQUENCE[idx]], true);
                 }
                 else {
                     seq_broken = true;
                     dprintln(F("** WRONG BUTTON, SEQ BROKEN"));
                     LED_EnableAll(false);
-                    //LED_Enable(LED_BY_BUTTON[SEQUENCE[idx]], false);
                     gSequenceIndex = 0;
                     break;
                 }
             }
         }
 
-        if(BUTT_NumPressed() == 0) {
-            LED_EnableAll(false);
-        }
-        
         // if seq broken, wait for all buttons to be released before letting users play again
         if(seq_broken && BUTT_NumPressed() == 0) {
             seq_broken = false;
         }
+        
 
         // ====================================================================
         // 1.2 - check the sequence match result
+        BUTT_Update();
         if(gSequenceIndex == 0) {
-            // dprintln(F("** SEQ BROKEN"));
+            dprintln(F("** SEQ BROKE BAD BUTT"));
+            prev_numpress = 0;
             LCD_Display(MESSAGE_EMPTY, NULL);
+            LED_EnableAll(false);
         }
         else if(gSequenceIndex == gSequenceLength) {
             dprintln(F("** SEQ OKAY ! win **"));
@@ -438,8 +452,7 @@ __reset:
 		    if(digitalRead(PIN_RESET)) {
 			    goto __reset;
 		    }
-    }
-
+    } // end while remaining secs
     
 	  dprintln(F("CHRONO SEQ ENDED, CHECK WON"));
 
@@ -471,85 +484,6 @@ __reset:
         // show lose message
         LCD_Display(MESSAGE_LOST_LINE_1, MESSAGE_LOST_LINE_2);
         delay(MESSAGE_DURATION_SEC * 1000);
-    }
-}
-
-void maxou_test_led() {
-    LED_EnableAll(true);
-    delay(1000);
-    LED_EnableAll(false);
-    delay(1000);
-
-    for(int i = 0; i < NUM_BUTTONS; i++) {
-        LED_Enable(LED_BY_BUTTON[i], true);
-        delay(1000);
-        LED_Enable(LED_BY_BUTTON[i], false);
-    }
-}
-
-void maxou_test_led2() {
-  
-  // TODO: déterminer quels sont les bon n°s de LED !!!
-  // TODO: tester avec LSB/MSB
-  LED_EnableAll(false);
-  int i = 0;
-  for(;;) {
-    if(digitalRead(PIN_RESET)) {
-        delay(500);
-        LED_EnableAll(false);
-        LED_Enable(i, true);
-        Serial.println(i, DEC);
-        i++;
-    }
-  }
-}
-
-
-void maxou_test_lcd() {
-  LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
-  while(1)
-    ;
-}
-
-void maxou_test_butt() {
-    
-    
-    // latch
-    digitalWrite(PIN_BUTT_LATCH, HIGH);
-    digitalWrite(PIN_BUTT_LATCH, LOW);
-    int numbutt = 0;
-    for(int bytenum = 0; bytenum < 3 /* nombre de puces 4021 */; bytenum++) {
-      gButtBuf[bytenum] = 0;
-      for(int bitnum = 0; bitnum < 8; bitnum++) {
-        if(digitalRead(PIN_BUTT_DATA)) {
-          
-          if(CHK_BIT(gButtBuf[bytenum], bitnum)) {
-              CLR_BIT(gButtBuf[bytenum], bitnum);
-              LED_Enable(LED_BY_BUTTON[numbutt], false);
-          }
-          else {
-              SET_BIT(gButtBuf[bytenum], bitnum);
-              LED_Enable(LED_BY_BUTTON[numbutt], true);
-          }
-          
-          dprint("pressed ");
-          Serial.println(numbutt, DEC);
-          
-        }
-        else {
-          gButtBuf[bytenum] |= (0 << bitnum);
-          //LED_Enable(LED_BY_BUTTON[numbutt], false);
-        }
-        numbutt++;
-        digitalWrite(PIN_BUTT_CLOCK, HIGH);
-        digitalWrite(PIN_BUTT_CLOCK, LOW);  
-      }
-
-    }
-    //dprintln(" ");
-
-    if(digitalRead(PIN_RESET)) {
-      dprintln("RESET");
     }
 }
 // EOF
