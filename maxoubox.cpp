@@ -29,11 +29,13 @@ uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {0, 1, 2, 3, 4, 5};
 
 // définition des messages à afficher sur le LCD
 #define MESSAGE_EMPTY               ("                ")
-#define MESSAGE_HELLO_LINE_1        ("Bienvenue       ")
-#define MESSAGE_HELLO_LINE_2        ("sur la MaxouBox!")
+#define MESSAGE_HELLO_LINE_1        ("Boite d'analyse ")
+#define MESSAGE_HELLO_LINE_2        ("moleculaire v2.0")
 
 #define MESSAGE_LOST_LINE_1         ("CHRONOMETRE     ")
 #define MESSAGE_LOST_LINE_2         ("EXPIRE :-(      ")
+
+#define MESSAGE_CHRONO              ("DECOMPTE: ")
 
 #define MESSAGE_WIN_LINE_1          ("CE N'EST PAS UNE")
 #define MESSAGE_WIN_LINE_2          ("CRISE CARDIAQUE ")
@@ -401,11 +403,13 @@ __reset:
         }
         else {
             //dprintln(F("** SEQ IN PROGRESS"));
+            
             char buf[16] = "";
             for(int i = 0; i < gSequenceIndex;i++)
-              buf[i] = '.';
+              buf[i] = 'o';
             buf[gSequenceIndex] = '\0';
             LCD_Display(buf, NULL);
+            
         }
 
 
@@ -423,7 +427,7 @@ __reset:
             unsigned int seconds = (unsigned int)(gRemainingSEC % 60);
             unsigned int minutes = (unsigned int)(gRemainingSEC / 60);
             char buf[16] = "";
-            sprintf(buf, "%d:%02d", minutes, seconds);
+            sprintf(buf, "%s%d:%02d", MESSAGE_CHRONO, minutes, seconds);
 
             //dprint("time: ");
             //dprintln(buf);
