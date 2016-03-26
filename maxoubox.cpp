@@ -5,36 +5,27 @@
 //  Created by Olivier on 09/03/2016.
 //  Copyright © 2016 Maestun. All rights reserved.
 //
-
+#include "Arduino.h"
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
 #include "maxoubox.h"
 
 // ============================================================================
 #pragma mark - CONFIGURATION
 // ============================================================================
-#define PIN_LED_LATCH 				      2
-#define PIN_LED_CLOCK 				      3
-#define PIN_LED_DATA				        4
-
-#define PIN_BUTT_LATCH 				      5
-#define PIN_BUTT_CLOCK 				      6
-#define PIN_BUTT_DATA				        7
-
-#define PIN_RESET					          8
-
 // nombre de boutons à appuyer pour gagner
-#define SEQUENCE_LENGTH             4
+#define SEQUENCE_LENGTH             6
 
 // mettre en commentaire pour ne pas générer la séquence aléatoirement à chaque fois
-// #define MODE_PUTE
+#define MODE_PUTE
 
 // si pas de mode pute, séquence en dur définie ci-dessous.
 // ATTENTION, le nombre de boutons doit être égal à SEQUENCE_LENGTH
-uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {10, 1, 18, 8};
+// les index des boutons vont de 0...NUM_BUTTONS
+uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {0, 1, 2, 3, 4, 5};
 
-#define NUM_BUTTONS                 20
-#define CHRONO_DURATION_SEC         (unsigned long)(1800)
+#define CHRONO_DURATION_SEC         (unsigned long)(240)
 #define MESSAGE_DURATION_SEC        (unsigned long)(10)
-#define RESET_DURATION_SEC          (unsigned long)(10)
 
 // définition des messages à afficher sur le LCD
 #define MESSAGE_EMPTY               ("                ")
@@ -50,18 +41,37 @@ uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {10, 1, 18, 8};
 #define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
 #define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
 
+
+// ============================================================================
+#pragma mark - CONFIGURATION HARDWARE (spécifique à chaque maxoubox)
+// ============================================================================
+#define NUM_BUTTONS                 20
+
+#define PIN_LED_LATCH 				      2
+#define PIN_LED_CLOCK 				      3
+#define PIN_LED_DATA				        4
+
+#define PIN_BUTT_LATCH 				      5
+#define PIN_BUTT_CLOCK 				      6
+#define PIN_BUTT_DATA				        7
+
+#define PIN_RESET					          8
 uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16, 15, 14, 13, 12, 21, 20, 19, 18, 17};
 
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 // SCL => A5
 // SDA => A4
-LiquidCrystal_I2C         gLCD(0x27, 16, 2);
+LiquidCrystal_I2C                   gLCD(0x27, 16, 2);
 // sequence: 0...NUM_BUTTON
+
+#define dprintinit(x)               Serial.begin(x)
+#define dprint(x)                   Serial.print(x)
+#define dprintln(x)                 Serial.println(x)
 
 
 // ============================================================================
-#pragma mark - Hardware routines
+#pragma mark - LCD SCREEN
 // ============================================================================
 void LCD_Setup() {
     dprintln(F("LCD_Setup"));
@@ -87,6 +97,9 @@ void LCD_Display(const char * aLine1, const char * aLine2) {
 }
 
 
+// ============================================================================
+#pragma mark - LED ARRAY
+// ============================================================================
 uint8_t gLedBuf[4] = {0, 0, 0, 0};
 void LED_Setup() {
     dprintln(F("LED_Setup"));
@@ -126,12 +139,7 @@ void debug8(uint8_t val) {
 }
 
 void LED_Enable(int aLed, bool aEnable) {
-/*    
-    dprint(F("LED_Enable "));
-    Serial.print(aLed, DEC);
-    dprint(F(": "));
-    dprintln(aEnable ? F("ON") : F("OFF"));
-*/
+
     int bytenum = aLed / 8;
     int bitnum = aLed - (8 * bytenum);
     //static uint8_t gLedBuf[4] = {0, 0, 0, 0};
@@ -148,7 +156,6 @@ void LED_Enable(int aLed, bool aEnable) {
         upd = true;
     }
     
-    //gLedBuf[idx] = aEnable ? (gLedBuf[idx] | (1 << dec)) : (gLedBuf[idx] & ~(1 << dec));
     if(upd) {
         digitalWrite(PIN_LED_LATCH, LOW);
         for(int i = 0; i < 4; i++) {
@@ -168,19 +175,12 @@ void LED_EnableAll(bool aEnable) {
           shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
     }
     digitalWrite(PIN_LED_LATCH, HIGH);
-    /*
-	  digitalWrite(PIN_LED_LATCH, LOW);
-	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	  shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-    shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	  // shiftOut(PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, output);
-	  digitalWrite(PIN_LED_LATCH, HIGH);
-	  delay(50);
-    */
 }
 
 
+// ============================================================================
+#pragma mark - BUTTON ARRAY
+// ============================================================================
 uint8_t gButtBuf[4] = {0, 0, 0, 0};
 void BUTT_Setup() {
     dprintln(F("BUTT_Setup"));
@@ -224,12 +224,7 @@ int BUTT_NumPressed() {
             }
         }
     }
-
-if(count>0) {
-  dprint(F("numpress "));
-  Serial.println(count, DEC);
-}
-    
+  
     return count;
 }
 
@@ -254,9 +249,8 @@ bool BUTT_IsPressed(int aButton) {
 }
 
 
-
 // ============================================================================
-#pragma mark - Main Loop
+#pragma mark - MAIN PROGRAM
 // ============================================================================
 unsigned long       gChronoStartMS  = 0;
 unsigned long       gRemainingSEC   = 0;
@@ -286,6 +280,7 @@ void maxou_pute() {
     }
 #endif
 }
+
 
 void maxou_setup() {
     dprintinit(9600);
@@ -476,5 +471,5 @@ __reset:
         delay(MESSAGE_DURATION_SEC * 1000);
     }
 }
-// EOF
 
+// EOF
