@@ -11,23 +11,32 @@
 // ============================================================================
 #pragma mark - CONFIGURATION
 // ============================================================================
-#define PIN_LED_LATCH 				2
-#define PIN_LED_CLOCK 				3
-#define PIN_LED_DATA				4
+#define PIN_LED_LATCH 				      2
+#define PIN_LED_CLOCK 				      3
+#define PIN_LED_DATA				        4
 
-#define PIN_BUTT_LATCH 				5
-#define PIN_BUTT_CLOCK 				6
-#define PIN_BUTT_DATA				7
+#define PIN_BUTT_LATCH 				      5
+#define PIN_BUTT_CLOCK 				      6
+#define PIN_BUTT_DATA				        7
 
-#define PIN_RESET					8
+#define PIN_RESET					          8
 
-#define USE_LCD                     1
+// nombre de boutons à appuyer pour gagner
+#define SEQUENCE_LENGTH             4
+
+// mettre en commentaire pour ne pas générer la séquence aléatoirement à chaque fois
+// #define MODE_PUTE
+
+// si pas de mode pute, séquence en dur définie ci-dessous.
+// ATTENTION, le nombre de boutons doit être égal à SEQUENCE_LENGTH
+uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {10, 1, 18, 8};
 
 #define NUM_BUTTONS                 20
 #define CHRONO_DURATION_SEC         (unsigned long)(1800)
 #define MESSAGE_DURATION_SEC        (unsigned long)(10)
 #define RESET_DURATION_SEC          (unsigned long)(10)
 
+// définition des messages à afficher sur le LCD
 #define MESSAGE_EMPTY               ("                ")
 #define MESSAGE_HELLO_LINE_1        ("Bienvenue       ")
 #define MESSAGE_HELLO_LINE_2        ("sur la MaxouBox!")
@@ -35,29 +44,19 @@
 #define MESSAGE_LOST_LINE_1         ("CHRONOMETRE     ")
 #define MESSAGE_LOST_LINE_2         ("EXPIRE :-(      ")
 
-#define MESSAGE_WIN_LINE_1          ("Indice:         ")
-#define MESSAGE_WIN_LINE_2          ("PAPRIKA MOULU   ")
+#define MESSAGE_WIN_LINE_1          ("CE N'EST PAS UNE")
+#define MESSAGE_WIN_LINE_2          ("CRISE CARDIAQUE ")
 
 #define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
 #define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
 
-#define SEQUENCE_COUNT              4
-uint8_t SEQUENCE[SEQUENCE_COUNT] =  {3, 6, 11, 1};
 uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16, 15, 14, 13, 12, 21, 20, 19, 18, 17};
 
 
-
-// TODO: import http://playground.arduino.cc/Main/ShiftOutX
-// shiftOutX gShiftOut(PIN_LED_LATCH, PIN_LED_DATA, PIN_LED_CLOCK, MSBFIRST, 4); 
-
-#ifdef USE_LCD
-	#include "LiquidCrystal_I2C.h"
-    // Set the LCD address to 0x27 for a 16 chars and 2 line display
-    // SCL => A5
-    // SDA => A4
-	LiquidCrystal_I2C         gLCD(0x27, 16, 2);
-#endif
-
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+// SCL => A5
+// SDA => A4
+LiquidCrystal_I2C         gLCD(0x27, 16, 2);
 // sequence: 0...NUM_BUTTON
 
 
@@ -66,26 +65,17 @@ uint8_t LED_BY_BUTTON[NUM_BUTTONS] = {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 16
 // ============================================================================
 void LCD_Setup() {
     dprintln(F("LCD_Setup"));
-#ifdef USE_LCD
     gLCD.init();
     gLCD.backlight();
-#endif
 }
 
 
 void LCD_Clear() {
-#ifdef USE_LCD
     gLCD.clear();
-#endif
 }
 
 
 void LCD_Display(const char * aLine1, const char * aLine2) {
-    /*dprint(F("LCD1: "));
-    dprintln(aLine1);
-    dprint(F("LCD2: "));
-    dprintln(aLine2);*/
-#ifdef USE_LCD
     if(aLine1 != NULL) {
         gLCD.setCursor(0, 0);
         gLCD.print(aLine1);
@@ -94,7 +84,6 @@ void LCD_Display(const char * aLine1, const char * aLine2) {
         gLCD.setCursor(0, 1);
         gLCD.print(aLine2);
     }
-#endif
 }
 
 
@@ -274,16 +263,12 @@ unsigned long       gRemainingSEC   = 0;
 unsigned long       gTimestamp      = 0;
 bool                gWon            = false;
 unsigned int        gSequenceIndex  = 0;
-const unsigned int  gSequenceLength = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
 
-LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-void maxou_setup() {
-    dprintinit(9600);
-
-    // init pseudo seq
-#ifdef USE_RANDOM
+void maxou_pute() {
+// init pseudo seq
+#ifdef MODE_PUTE
     randomSeed(analogRead(A6));
-    for(int seq = 0; seq < SEQUENCE_COUNT;) {
+    for(int seq = 0; seq < SEQUENCE_LENGTH;) {
         uint8_t num = random(0, NUM_BUTTONS);
         bool found = false;
         for(int i = 0; i < seq; i++) {
@@ -300,8 +285,11 @@ void maxou_setup() {
         }
     }
 #endif
+}
 
-    
+void maxou_setup() {
+    dprintinit(9600);
+   
     // configure GPIO
     BUTT_Setup();
     LED_Setup();
@@ -314,13 +302,15 @@ void maxou_setup() {
         LCD_Display(MESSAGE_DEBUG_LINE_1, MESSAGE_DEBUG_LINE_2);
         LED_EnableAll(true);
         delay(MESSAGE_DURATION_SEC * 1000);
-        //maxou_test_butt();
     }
 }
 
 
 void maxou_loop() {
 __reset:
+
+    maxou_pute();
+
     LED_EnableAll(false);
     BUTT_Update();
     
@@ -410,7 +400,7 @@ __reset:
             LCD_Display(MESSAGE_EMPTY, NULL);
             LED_EnableAll(false);
         }
-        else if(gSequenceIndex == gSequenceLength) {
+        else if(gSequenceIndex == SEQUENCE_LENGTH) {
             dprintln(F("** SEQ OKAY ! win **"));
             gWon = true;
         }
