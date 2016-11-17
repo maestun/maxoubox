@@ -30,15 +30,15 @@ uint8_t SEQUENCE[SEQUENCE_LENGTH] =  {0, 1, 2, 3, 4, 5};
 // définition des messages à afficher sur le LCD
 #define MESSAGE_EMPTY               ("                ")
 #define MESSAGE_HELLO_LINE_1        ("Boite d'analyse ")
-#define MESSAGE_HELLO_LINE_2        ("moleculaire v2.0")
+#define MESSAGE_HELLO_LINE_2        ("moleculaire v2.1")
 
 #define MESSAGE_LOST_LINE_1         ("CHRONOMETRE     ")
 #define MESSAGE_LOST_LINE_2         ("EXPIRE :-(      ")
 
 #define MESSAGE_CHRONO              ("DECOMPTE: ")
 
-#define MESSAGE_WIN_LINE_1          ("CE N'EST PAS UNE")
-#define MESSAGE_WIN_LINE_2          ("CRISE CARDIAQUE ")
+#define MESSAGE_WIN_LINE_1          ("TAILLE APPROX   ")
+#define MESSAGE_WIN_LINE_2          ("DE 1M70 A 1M80  ")
 
 #define MESSAGE_DEBUG_LINE_1        ("0123456789ABCDEF")
 #define MESSAGE_DEBUG_LINE_2        ("FEDCBA9876543210")
